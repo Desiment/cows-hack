@@ -1,10 +1,10 @@
-import copy
+from copy import copy
 import re
 
 import numpy as np
 import pandas as pd
 
-df = pd.read_csv("../data/raw/raw.csv")
+df = pd.read_csv("../data/raw/raw.csv", low_memory=False)
 
 col_mapper = {
     'Номер события': 'event_id',
