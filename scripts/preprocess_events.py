@@ -81,7 +81,7 @@ special_events = {'move', 'abort'}
 all_events = categorical_events | protocol_events | mid_events | simple_events | special_events | number_events
 
 kaggle = False
-save_dataset = False
+save_dataset = True
 
 if kaggle:
     dataset_path = '/kaggle/input/cow-treatment/events.csv'
@@ -191,6 +191,7 @@ class AbortParser(CategoricalParser):
             return self.event
         else:
             return '_'.join([self.event, remark])
+
 
 class ProtocolParser(CategoricalParser):
 
@@ -366,6 +367,11 @@ def save_simple_events(df):
         if event in parsers:
             parser = parsers[event]
             df_event['event'] = df_event['remark'].apply(lambda x: parser.modify_event(x))
+            if event == 'weight':
+                high = df_event['remark'].astype(np.int32).quantile(0.97)
+                low = df_event['remark'].astype(np.int32).quantile(0.03)
+                df_event['event'] = df_event['remark'].astype(np.int32).apply(
+                    lambda w: 'weight_high' if w >= high else ('weight_low' if w <= low else 'weight_mid'))
         df_events.append(df_event)
     events_df = pd.concat(df_events)
     events_df.drop(['remark'], axis=1, inplace=True)
