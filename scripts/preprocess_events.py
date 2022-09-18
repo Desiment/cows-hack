@@ -72,12 +72,12 @@ col_mapper = {
 
 categorical_events = {'vaccine', 'hormones', 'fertilized', 'well', 'footrim', 'stop_milking', 'fail_birth',
                       'after_birth_treatment', 'metr', 'not_fertilize', 'ketos', 'placenta', 'pares',
-                      'defect', 'abort'}
+                      'defect'}
 protocol_events = {'ill_other', 'mast', 'lame'}
 mid_events = {'sold', 'death'}
 simple_events = {'birth', 'stop_milking2', 'stop_hormones'}
 number_events = {'weight', 'pregnant', 'long_pregnant'}
-special_events = {'move'}
+special_events = {'move', 'abort'}
 all_events = categorical_events | protocol_events | mid_events | simple_events | special_events | number_events
 
 kaggle = False
@@ -172,6 +172,26 @@ class MidParser(CategoricalParser):
         return super().parse(values[1])
 
 
+class AbortParser(CategoricalParser):
+
+    def __init__(self, **kwargs):
+        super(AbortParser, self).__init__(**kwargs)
+        self.num_extra_symbols = re.compile('[^0-9]')
+        self.num_finder = re.compile('[0-9]')
+
+    def parse(self, remark):
+        m = self.num_finder.match(remark)
+        if m:
+            return int(self.num_extra_symbols.sub('', remark))
+        else:
+            return super().parse(remark)
+
+    def modify_event(self, remark):
+        if str(remark).isdigit():
+            return self.event
+        else:
+            return '_'.join([self.event, remark])
+
 class ProtocolParser(CategoricalParser):
 
     def __init__(self, unique_values, **kwargs):
@@ -252,7 +272,8 @@ parsers = {
     **{event: NumberParser(event=event) for event in number_events},
     **{event: ProtocolParser(event=event, unique_values=event_remarks[event]) for event in protocol_events},
     **{event: CategoricalParser(event=event) for event in categorical_events},
-    'move': MoveParser(event='move')
+    'move': MoveParser(event='move'),
+    'abort': AbortParser(event='abort')
 }
 parsers['well'].add_entries([
     RemarkEntry(['procie', 'procee', '611078', '812142', '910092', '102181', '22592', '912238'], 'other'),
@@ -301,7 +322,9 @@ parsers['not_fertilize'].add_entries([
     RemarkEntry(['genekol', 'genikol', 'ginekol'], 'ginekol'),
     RemarkEntry(['atp', 'at', 'am', 'atb', 'amb'], 'at'),
     RemarkEntry(['brakmol', 'moloko'], 'moloko'),
-    RemarkEntry(['jirnaa', 'jirn', 'melkaa', 'razvitie', 'rost', 'nedorost', 'uzkijtaz', 'hudaa', 'tos', 'tossust', 'ves'], 'weight'),
+    RemarkEntry(
+        ['jirnaa', 'jirn', 'melkaa', 'razvitie', 'rost', 'nedorost', 'uzkijtaz', 'hudaa', 'tos', 'tossust', 'ves'],
+        'weight'),
     RemarkEntry(
         ['abs', 'absmatki', 'abszes', 'brakabs', 'absmatk', 'absmatka', 'abc', 'abz', 'abzes', 'abzopuh', 'bezmatki',
          'bezmetki', 'abszess', 'avs', 'bmatki'], 'abs'),
@@ -347,19 +370,29 @@ def save_simple_events(df):
     events_df = pd.concat(df_events)
     events_df.drop(['remark'], axis=1, inplace=True)
     events_df.sort_values(by=['date', 'id'], ascending=True, inplace=True)
-    events_df.reset_index().drop(['index'], axis=1).to_feather('simple_events.ftr')
+    events_df = events_df.reset_index().drop(['index'], axis=1)
+    if kaggle:
+        events_df.to_feather('simple_events.ftr')
+    else:
+        events_df.to_feather('../data/simple_events.ftr')
 
 
 def save_cow_features(df):
     cows_df = df[['id', 'birthday', 'birth_result', 'birth_difficult']].groupby('id').agg('first').reset_index()
-    cows_df.to_feather('cows.ftr')
+    if kaggle:
+        cows_df.to_feather('cows.ftr')
+    else:
+        cows_df.to_feather('../data/cows.ftr')
 
 
 def save_weighting_history(df):
     weights_df = df[df['event'] == 'weight'][['id', 'date', 'remark']].reset_index().drop(['index'], axis=1)
     weights_df['weight'] = weights_df['remark'].astype(np.uint16)
     weights_df.drop(['remark'], axis=1, inplace=True)
-    weights_df.to_feather('weights.ftr')
+    if kaggle:
+        weights_df.to_feather('weights.ftr')
+    else:
+        weights_df.to_feather('../data/weights.ftr')
 
 
 if save_dataset:
